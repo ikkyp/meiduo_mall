@@ -2,11 +2,12 @@ import json
 import re
 
 from django import http
-from django.contrib.auth import login, authenticate
+from django.contrib.auth import login, authenticate, logout
 from django.http import JsonResponse
 from django.views import View
 
 from apps.users.models import User
+from utils.views import LoginRequiredJSONMixin
 
 
 # Create your views here.
@@ -59,14 +60,14 @@ class LoginView(View):
         password = data.get('password')
         remembered = data.get('remembered')
 
+        if not all([username, password]):
+            return JsonResponse({'code': 400, 'errmsg': '缺少参数'})
+
         # 判断用户使用的是手机号登录还是用户名登录
-        if re.match('^1[3-9]\d{9}$', username):
+        if re.match('1[3-9]\d{9}', username):
             User.USERNAME_FIELD = 'mobile'
         else:
             User.USERNAME_FIELD = 'username'
-
-        if not all([username, password]):
-            return JsonResponse({'code': 400, 'errmsg': '缺少参数'})
 
         # 验证该账户密码是否能够登录
         user = authenticate(username=username, password=password)
@@ -77,9 +78,26 @@ class LoginView(View):
         login(request, user)
 
         # 判断是否记住用户
-        if remembered == True:
+        if remembered:
             request.session.set_expiry(None)  # 两周内无需再次登录
         else:
             request.session.set_expiry(0)  # 浏览器关闭即退出登录
+        # 用户名展示
+        response = JsonResponse({'code': 0, 'errmsg': 'ok'})
+        response.set_cookie('username', username, max_age=3600 * 24 * 15)
+        return response
 
-        return JsonResponse({'code': 0, 'errmsg': 'ok'})
+
+class LogoutView(View):
+    """ 用户退出 """
+    def delete(self, request):
+        logout(request)
+        response = JsonResponse({'code': 0, 'errmsg': 'ok'})
+        response.delete_cookie('username')
+        return response
+
+
+class UserInfoView(LoginRequiredJSONMixin, View):
+    """ 添加修改邮箱 """
+    def put(self, request):
+        pass
