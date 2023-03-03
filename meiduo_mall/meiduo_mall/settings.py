@@ -25,7 +25,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'apps.users',
-    'apps.verifications'
+    'apps.verifications',
     'corsheaders',
 ]
 
@@ -70,7 +70,7 @@ DATABASES = {
         'PORT': 3306,  # 数据库端口
         'USER': 'root',  # 数据库用户名
         'PASSWORD': '123456',  # 数据库用户密码
-        'NAME': 'meiduo_mall'  # 数据库名字
+        'NAME': 'meiduo_test'  # 数据库名字
     },
     # 'default': {
     #     'ENGINE': 'django.db.backends.sqlite3',
