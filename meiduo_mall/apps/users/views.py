@@ -8,7 +8,7 @@ from django.views import View
 
 from apps.users.models import User
 from utils.views import LoginRequiredJSONMixin
-
+from django_redis import get_redis_connection
 
 # Create your views here.
 class UsernameCountView(View):
@@ -42,12 +42,25 @@ class RegisterView(View):
         # 判断参数是否齐全
         if not all([username, password, password2, mobile, allow, sms_code]):
             return http.JsonResponse({'code': 400, 'errmsg': '缺少必传参数!'})
+
+        # 验证短信验证码
+        redis_conn = get_redis_connection('code')
+        sms_code_server = redis_conn.get(mobile)
+        # 判断短信验证码是否过期
+        if not sms_code_server:
+            return http.JsonResponse({'code': 400, 'errmsg': '短信验证码失效'})
+        # 对比用户输入的和服务端存储的短信验证码是否一致
+        if sms_code != sms_code_server.decode():  # sms_code_server是byte,需要解码对比
+            return http.JsonResponse({'code': 400, 'errmsg': '短信验证码有误'})
+
         user = User.objects.create_user(username=username,  # 使用create_user将会对密码直接进行哈希加密处理
                                         password=password,  # 仅django自带的user模型有用
                                         mobile=mobile)
         # 如果注册成功则保持登录状态
         login(request, user)
-        return http.JsonResponse({'code': 0, 'errmsg': 'ok'})
+        response = JsonResponse({'code': 0, 'errmsg': 'ok'})
+        response.set_cookie('username', user.username, max_age=3600 * 24 * 15)
+        return response
 
 
 class LoginView(View):
@@ -90,6 +103,7 @@ class LoginView(View):
 
 class LogoutView(View):
     """ 用户退出 """
+
     def delete(self, request):
         logout(request)
         response = JsonResponse({'code': 0, 'errmsg': 'ok'})
@@ -97,7 +111,18 @@ class LogoutView(View):
         return response
 
 
-class UserInfoView(LoginRequiredJSONMixin, View):
-    """ 添加修改邮箱 """
-    def put(self, request):
-        pass
+class CenterView(LoginRequiredJSONMixin, View):
+
+    def get(self, request):
+        # request.user 就是 已经登录的用户信息
+        # request.user 是来源于 中间件
+        # 系统会进行判断 如果我们确实是登录用户，则可以获取到 登录用户对应的 模型实例数据
+        # 如果我们确实不是登录用户，则request.user = AnonymousUser()  匿名用户
+        info_data = {
+            'username': request.user.username,
+            'email': request.user.email,
+            'mobile': request.user.mobile,
+            'email_active': request.user.email_active,
+        }
+
+        return JsonResponse({'code': 0, 'errmsg': 'ok', 'info_data': info_data})

@@ -10,6 +10,7 @@ from libs.captcha.captcha import captcha
 
 class ImageCodeView(View):
     """ 生成图片验证码并保存 """
+
     def get(self, request, uuid):
         # 获取图片验证码的文本信息以及图片
         text, image = captcha.generate_captcha()
@@ -50,14 +51,12 @@ class SmsCodeView(View):
 
         # 新建管道
         pipeline = redis_cli.pipeline()
+        # 保存短信验证码
         pipeline.setex(mobile, 300, sms_code)
         # 设置标记，避免多次重复发送验证码（标记有效期一分钟）
         pipeline.setex('send_flag_%s' % mobile, 60, 1)
         # 执行管道内的指令，减少redis数据库的访问次数
         pipeline.execute()
-
-        # 执行celery中的短信发送模块
-        celery_send_sms_code.delay(mobile, sms_code)
+        # 执行celery中的短信发送模块(测试阶段，不发送信息)
+        # celery_send_sms_code.delay(mobile, sms_code)
         return JsonResponse({'code': 0, 'errmsg': 'ok'})
-
-
