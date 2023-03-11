@@ -1,6 +1,7 @@
 import json
 import logging
 import re
+
 from django import http
 from django.contrib.auth import login, authenticate, logout
 from django.http import JsonResponse
@@ -136,9 +137,6 @@ class EmailView(LoginRequiredJSONMixin, View):
         if not email:
             return http.JsonResponse({'code': 400,
                                       'errmsg': '缺少email参数'})
-        if not re.match(r'^[a-z0-9][\w\.\-]*@[a-z0-9\-]+(\.[a-z]{2,5}){1,2}$', email):
-            return http.JsonResponse({'code': 400,
-                                      'errmsg': '参数email有误'})
         try:
             request.user.email = email
             request.user.save()
@@ -171,3 +169,32 @@ class VerifyEmailView(View):
             logger.error(e)
             return JsonResponse({'code': 0, 'errmsg': '激活失败!'})
         return JsonResponse({'code': 0, 'errmsg': 'ok'})
+
+
+class ChangePasswordView(View):
+    # 修改密码
+    def put(self, request):
+        user = request.user
+        json_dict = json.loads(request.body.decode())
+        old_password = json_dict.get('old_password')
+        new_password = json_dict.get('new_password')
+        new_password2 = json_dict.get('new_password2')
+
+        # 校验参数
+        if not all([old_password, new_password, new_password2]):
+            return JsonResponse({'code': 400,
+                                 'errmsg': '缺少必传参数'})
+        if not user.check_password(old_password):
+            return JsonResponse({'code': 400,
+                                 'errmsg': '原始密码不正确'})
+        if new_password != new_password2:
+            return JsonResponse({'code': 400,
+                                 'errmsg': '两次输入密码不一致'})
+        user.set_password(new_password)
+        user.save()
+        # 退出登录
+        logout(request)
+        response = JsonResponse({'code': 0,
+                                 'errmsg': 'ok'})
+        response.delete_cookie('username')
+        return response
