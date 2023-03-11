@@ -13,6 +13,3 @@ class User(AbstractUser):
         db_table = 'tb_users'
         verbose_name = '用户管理'
         verbose_name_plural = verbose_name
-
-    def __str__(self):
-        return self.username

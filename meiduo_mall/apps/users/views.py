@@ -1,14 +1,18 @@
 import json
+import logging
 import re
-
 from django import http
 from django.contrib.auth import login, authenticate, logout
 from django.http import JsonResponse
 from django.views import View
+from django_redis import get_redis_connection
 
 from apps.users.models import User
+from meiduo_mall import settings
 from utils.views import LoginRequiredJSONMixin
-from django_redis import get_redis_connection
+
+logger = logging.getLogger('django')
+
 
 # Create your views here.
 class UsernameCountView(View):
@@ -112,17 +116,58 @@ class LogoutView(View):
 
 
 class CenterView(LoginRequiredJSONMixin, View):
-
     def get(self, request):
-        # request.user 就是 已经登录的用户信息
-        # request.user 是来源于 中间件
-        # 系统会进行判断 如果我们确实是登录用户，则可以获取到 登录用户对应的 模型实例数据
-        # 如果我们确实不是登录用户，则request.user = AnonymousUser()  匿名用户
+        # 当用户处于登录状态时，返回用户的基本信息， 否则通过LoginRequiredJSONMixin返回错误信息
         info_data = {
             'username': request.user.username,
-            'email': request.user.email,
             'mobile': request.user.mobile,
-            'email_active': request.user.email_active,
+            'email': request.user.email,
+            'email_active': request.user.email_active
         }
+        return JsonResponse({'code': 200, 'info_data': info_data, 'errmsg': 'ok'})
 
-        return JsonResponse({'code': 0, 'errmsg': 'ok', 'info_data': info_data})
+
+class EmailView(LoginRequiredJSONMixin, View):
+    def put(self, request):
+        # 修改用户邮箱
+        json_dict = json.loads(request.body.decode())
+        email = json_dict.get('email')
+        # 校验参数
+        if not email:
+            return http.JsonResponse({'code': 400,
+                                      'errmsg': '缺少email参数'})
+        if not re.match(r'^[a-z0-9][\w\.\-]*@[a-z0-9\-]+(\.[a-z]{2,5}){1,2}$', email):
+            return http.JsonResponse({'code': 400,
+                                      'errmsg': '参数email有误'})
+        try:
+            request.user.email = email
+            request.user.save()
+        except Exception as e:
+            logger.error(e)
+            return JsonResponse({'code': 400, 'errmsg': '添加邮箱失败'})
+        # 发送邮箱进行验证
+        from celery_tasks.email.tasks import send_verify_email
+        user = request.user
+        verify_url = settings.EMAIL_VERIFY_URL + '?user_id=%s&&email=%s' % (user.id, user.email)
+        print(verify_url)
+        send_verify_email(email, verify_url)
+        return JsonResponse({'code': 200, 'errmsg': '添加邮箱成功'})
+
+
+class VerifyEmailView(View):
+    # 验证数据库是否含有该用户，并将该用户邮箱改为激活
+    def put(self, request):
+        user_id = request.GET.get('user_id')
+        email = request.GET.get('email')
+        try:
+            user = User.objects.get(id=user_id, email=email)
+        except User.DoesNotExist as e:
+            logger.error(e)
+            return JsonResponse({'code': 400, 'errmsg': '参数有误!'})
+        try:
+            user.email_active = True
+            user.save()
+        except Exception as e:
+            logger.error(e)
+            return JsonResponse({'code': 0, 'errmsg': '激活失败!'})
+        return JsonResponse({'code': 0, 'errmsg': 'ok'})
