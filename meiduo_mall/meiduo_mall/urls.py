@@ -13,4 +13,5 @@ urlpatterns = [
     path('', include('apps.oauth.urls')),
     path('', include('apps.areas.urls')),
     path('', include('apps.contents.urls')),
+    path('', include('apps.goods.urls')),
 ]
