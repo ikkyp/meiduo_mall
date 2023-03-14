@@ -29,6 +29,8 @@ INSTALLED_APPS = [
     'apps.oauth',
     'corsheaders',
     'apps.areas',
+    'apps.goods',
+    'apps.contents',
 ]
 
 MIDDLEWARE = [
@@ -72,7 +74,10 @@ DATABASES = {
         'PORT': 3306,  # 数据库端口
         'USER': 'root',  # 数据库用户名
         'PASSWORD': '123456',  # 数据库用户密码
-        'NAME': 'meiduo_test'  # 数据库名字
+        'NAME': 'meiduo_test',  # 数据库名字
+        'OPTIONS': {
+            'init_command': "SET sql_mode='STRICT_TRANS_TABLES'"
+        }
     },
     # 'default': {
     #     'ENGINE': 'django.db.backends.sqlite3',
@@ -222,3 +227,10 @@ EMAIL_HOST_PASSWORD = '123456abc'
 EMAIL_FROM = '美多商城<qi_rui_hua@163.com>'
 # 邮箱验证链接
 EMAIL_VERIFY_URL = 'http://www.meiduo.site:8080/success_verify_email.html'
+
+# 指定自定义的Django文件存储类
+DEFAULT_FILE_STORAGE = 'utils.fastdfs.storage.FastDFSStorage'
+
+# FastDFS相关参数
+# FDFS_BASE_URL = 'http://192.168.103.158:8888/'
+FDFS_BASE_URL = 'http://image.meiduo.site:8888/'
