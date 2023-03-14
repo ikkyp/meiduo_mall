@@ -27,10 +27,11 @@ INSTALLED_APPS = [
     'apps.users',
     'apps.verifications',
     'apps.oauth',
-    'corsheaders',
     'apps.areas',
     'apps.goods',
     'apps.contents',
+    # CORS
+    'corsheaders',
     'haystack',  # 全文检索
 ]
 

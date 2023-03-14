@@ -1,10 +1,13 @@
+from datetime import date
+
 from django.core.paginator import Paginator
 from django.http import JsonResponse
+from django.shortcuts import render
 from django.views import View
 from haystack.views import SearchView
 
-from apps.goods.models import SKU, GoodsCategory
-from utils.goods import get_breadcrumb
+from apps.goods.models import SKU, GoodsCategory, GoodsVisitCount
+from utils.goods import get_breadcrumb, get_categories, get_goods_specs
 
 
 class ListView(View):
@@ -93,3 +96,53 @@ class MySearchView(SearchView):
             })
         # 拼接参数, 返回
         return JsonResponse(data_list, safe=False)
+
+
+class DetailView(View):
+    """商品详情页"""
+
+    def get(self, request, sku_id):
+        """提供商品详情页"""
+        # 获取当前sku的信息
+        sku = SKU.objects.get(id=sku_id)
+        # 查询商品频道分类
+        categories = get_categories()
+        # 查询面包屑导航
+        breadcrumb = get_breadcrumb(sku.category)
+        # 查询商品规格信息
+        goods_specs = get_goods_specs(sku_id)
+        # 渲染页面
+        context = {
+            'categories': categories,
+            'breadcrumb': breadcrumb,
+            'sku': sku,
+            'specs': goods_specs,
+        }
+        return render(request, 'detail.html', context)
+
+
+class CategoryVisitCountView(View):
+
+    def post(self, request, category_id):
+        # 1.接收分类id
+        # 2.验证参数（验证分类id）
+        try:
+            category = GoodsCategory.objects.get(id=category_id)
+        except GoodsCategory.DoesNotExist:
+            return JsonResponse({'code': 400, 'errmsg': '没有此分类'})
+        # 3.查询当天 这个分类的记录有没有
+
+        today = date.today()
+        try:
+            gvc = GoodsVisitCount.objects.get(category=category, date=today)
+        except GoodsVisitCount.DoesNotExist:
+            # 4. 没有新建数据
+            GoodsVisitCount.objects.create(category=category,
+                                           date=today,
+                                           count=1)
+        else:
+            # 5. 有的话更新数据
+            gvc.count += 1
+            gvc.save()
+        # 6. 返回响应
+        return JsonResponse({'code': 0, 'errmsg': 'ok'})
