@@ -30,9 +30,9 @@ INSTALLED_APPS = [
     'apps.areas',
     'apps.goods',
     'apps.contents',
-    # CORS
-    'corsheaders',
+    'corsheaders',  # CORS
     'haystack',  # 全文检索
+    'django_crontab',  # 定时任务
 ]
 
 MIDDLEWARE = [
@@ -245,6 +245,26 @@ HAYSTACK_CONNECTIONS = {
         'INDEX_NAME': 'meiduo_mall',  # Elasticsearch建立的索引库的名称
     },
 }
-
+# 设置搜索 每页返回的记录条数
+HAYSTACK_SEARCH_RESULTS_PER_PAGE = 5
 # 当添加、修改、删除数据时，自动生成索引
 # HAYSTACK_SIGNAL_PROCESSOR = 'haystack.signals.RealtimeSignalProcessor'
+
+# 定时任务
+"""
+# 元素的第一个参数是 频次
+分 时 日 月 周    命令
+M: 分钟（0-59）。每分钟用 * 或者 */1 表示
+H：小时（0-23）。（0表示0点）
+D：天（1-31）。
+m: 月（1-12）。
+d: 一星期内的天（0~6，0为星期天）。
+# 元素的第二个参数是 定时任务（函数）
+"""
+# 每分钟执行一次定时任务并写入日志
+# !!!!!!!!!!!!! 由于windows没有crontab模块，所以应该部署到linux上执行定时任务 !!!!!!!!!!!!!
+CRONJOBS = [
+    ('*/1 * * * *', 'apps.contents.crons.generic_meiduo_index', '>> ' + os.path.join(BASE_DIR, 'logs/crontab.log'))
+]
+# 在定时任务中，如果出现非英文字符，会出现字符异常错误
+CRONTAB_COMMAND_PREFIX = 'LANG_ALL=zh_cn.UTF-8'
