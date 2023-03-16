@@ -1,9 +1,11 @@
+import json
 from datetime import date
 
 from django.core.paginator import Paginator
 from django.http import JsonResponse
 from django.shortcuts import render
 from django.views import View
+from django_redis import get_redis_connection
 from haystack.views import SearchView
 
 from apps.goods.models import SKU, GoodsCategory, GoodsVisitCount
@@ -146,3 +148,46 @@ class CategoryVisitCountView(View):
             gvc.save()
         # 6. 返回响应
         return JsonResponse({'code': 0, 'errmsg': 'ok'})
+
+
+class UserBrowseHistory(View):
+    # 用户浏览记录
+    def post(self, request):
+        # 获取商品id
+        sku_id = json.loads(request.body.decode()).get('sku_id')
+        # 登录用户id
+        user_id = request.user.id
+        # 链接数据库并保存商品id
+        redis_conn = get_redis_connection('history')
+        p1 = redis_conn.pipeline()
+        # 去除重复的浏览记录(0表示移除所有的与value相同的值)
+        '''
+            count > 0 : 从表头开始向表尾搜索，移除与 VALUE 相等的元素，数量为 COUNT 。
+            count < 0 : 从表尾开始向表头搜索，移除与 VALUE 相等的元素，数量为 COUNT 的绝对值。
+            count = 0 : 移除表中所有与 VALUE 相等的值。
+        '''
+        p1.lrem('history_%s' % user_id, 0, sku_id)
+        # 存数据
+        p1.lpush('history_%s' % user_id, sku_id)
+        # 截取数据（最多保存五条浏览记录）
+        p1.ltrim('history_%s' % user_id, 0, 4)
+        p1.execute()
+        return JsonResponse({'code': 0, 'errmsg': 'OK'})
+
+    # 获取用户浏览记录
+    def get(self, request):
+        # 获取id
+        user = request.user
+        redis_conn = get_redis_connection('history')
+        sku_ids = redis_conn.lrange('history_%s' % user.id, 0, -1)
+        # 获取商品信息并传入前端
+        skus = []
+        for sku_id in sku_ids:
+            sku = SKU.objects.get(id=sku_id)
+            skus.append({
+                'id': sku.id,
+                'name': sku.name,
+                'default_image_url': sku.default_image.url,
+                'price': sku.price
+            })
+        return JsonResponse({'code': 0, 'errmsg': 'OK', 'skus': skus})

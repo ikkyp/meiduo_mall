@@ -18,7 +18,7 @@
                 <div v-if="username" class="login_btn fl">
                     欢迎您：<em>[[ username ]]</em>
                     <span>|</span>
-                    <a @click="logoutfunc">退出</a>
+                    <a @click="logoutfunc" class="quit">退出</a>
                 </div>
                 <div v-else class="login_btn fl">
                     <a href="/login.html">登录</a>
