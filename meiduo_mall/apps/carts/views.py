@@ -33,23 +33,24 @@ class CartsView(View):
             return JsonResponse({'code': 0, 'errmsg': '添加购物车成功'})
         else:
             # 未登录状态
-            cart_str = request.COOKIES.get('carts')
-            if cart_str:
-                cart_dict = pickle.loads(base64.b64decode(eval(cart_str)))
+            carts_str = request.COOKIES.get('carts')
+            if carts_str:
+                cart_dict = pickle.loads(base64.b64decode(carts_str))
             else:
                 cart_dict = {}
             if sku_id in cart_dict:
                 # 网页中该商品的数量
                 addcartcount = cart_dict[sku_id]['count']
                 count += addcartcount
-                cart_dict[sku_id] = {
-                    'count': count,
-                    'selected': selected
-                }
+            cart_dict[sku_id] = {
+                'count': count,
+                'selected': selected
+            }
             # 数据转换加密（将字典转成bytes,再将bytes转成base64的bytes,最后将bytes转字符串）
-            cookie_str = base64.b64decode(pickle.dumps(cart_dict)).decode()
+            cookie_cart = base64.b64encode(pickle.dumps(cart_dict))
             response = JsonResponse({'code': 0, 'errmsg': '添加购物车成功'})
-            response.set_cookie('carts', cookie_str, max_age=7 * 24 * 3600)
+            # decode是将bytes数据转化为字符串，value只能为字符串
+            response.set_cookie('carts', cookie_cart.decode(), max_age=7 * 24 * 3600)
             return response
 
     # 查询购物车
@@ -70,7 +71,7 @@ class CartsView(View):
         else:
             cart_str = request.COOKIES.get('carts')
             if cart_str:
-                cart_dict = pickle.loads(base64.b64decode(eval(cart_str)))
+                cart_dict = pickle.loads(base64.b64decode(cart_str))
             else:
                 cart_dict = {}
         sku_ids = cart_dict.keys()
@@ -116,7 +117,7 @@ class CartsView(View):
         else:
             cart_str = request.COOKIES.get('carts')
             if cart_str:
-                cart_dict = pickle.loads(base64.b64decode(eval(cart_str)))
+                cart_dict = pickle.loads(base64.b64decode(cart_str))
             else:
                 cart_dict = {}
             if sku_id in cart_dict:
@@ -124,9 +125,9 @@ class CartsView(View):
                     'count': count,
                     'selected': selected
                 }
-            cookie_cart_str = base64.b64encode(pickle.dumps(cart_dict)).decode()
+            cookie_cart_str = base64.b64encode(pickle.dumps(cart_dict))
             response = JsonResponse({'code': 0, 'errmsg': 'ok', 'cart_sku': {'count': count, 'selected': selected}})
-            response.set_cookie('carts', cookie_cart_str, max_age=14 * 24 * 3600)
+            response.set_cookie('carts', cookie_cart_str.decode(), max_age=14 * 24 * 3600)
             #     5.5 返回响应
             return response
 
@@ -162,4 +163,32 @@ class CartsView(View):
             response = JsonResponse({'code': 0, 'errmsg': 'ok'})
             response.set_cookie('carts', new_carts.decode(), max_age=14 * 24 * 3600)
             #     5.5 返回响应
+            return response
+
+
+class CartsSelectAllView(View):
+    # 全选购物车
+    def put(self, request):
+        json_dict = json.loads(request.body.decode())
+        user = request.user
+        selected = json_dict.get('selected')
+        if user.is_authenticated:
+            redis_conn = get_redis_connection('carts')
+            cart = redis_conn.hgetall('carts_%s' % user.id)
+            sku_ids = cart.keys()
+            for sku_id in sku_ids:
+                if selected:
+                    redis_conn.sadd('selected_%s' % user.id, sku_id)
+                else:
+                    redis_conn.srem('selected_%s' % user.id, sku_id)
+            return JsonResponse({'code': 0, 'errmsg': '全选购物车成功'})
+        else:
+            carts_str = request.COOKIES.get('carts')
+            response = JsonResponse({'code': 0, 'errmsg': '全选购物车成功'})
+            if carts_str:
+                cart = pickle.loads(base64.b64decode(carts_str))
+                for sku_id in cart:
+                    cart[sku_id]['selected'] = selected
+                cookie_cart = base64.b64encode(pickle.dumps(cart))
+                response.set_cookie('carts', cookie_cart.decode(), max_age=7 * 24 * 3600)
             return response
