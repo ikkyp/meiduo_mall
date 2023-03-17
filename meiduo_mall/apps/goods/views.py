@@ -124,7 +124,7 @@ class DetailView(View):
 
 
 class CategoryVisitCountView(View):
-
+    # 商品数据访问量
     def post(self, request, category_id):
         # 1.接收分类id
         # 2.验证参数（验证分类id）

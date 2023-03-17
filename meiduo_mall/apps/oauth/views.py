@@ -75,13 +75,14 @@ class QQAuthUserView(View):
             user = oauth_qq.user
             # 实现状态保持
             login(request, user)
-
             # 创建重定向到主页的对象
             response = http.JsonResponse({'code': 0, 'errmsg': 'ok'})
 
             # 将用户信息写入到 cookie 中，有效期14天
             response.set_cookie('username', user.username, max_age=3600 * 24 * 14)
-
+            # 合并购物车
+            from apps.carts.utils import merge_cart_cookie_to_redis
+            response = merge_cart_cookie_to_redis(request, user, response)
             # 返回响应
             return response
 

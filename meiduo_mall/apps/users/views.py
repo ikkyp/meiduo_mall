@@ -103,6 +103,9 @@ class LoginView(View):
         # 用户名展示
         response = JsonResponse({'code': 0, 'errmsg': 'ok'})
         response.set_cookie('username', username, max_age=3600 * 24 * 15)
+        # 合并购物车
+        from apps.carts.utils import merge_cart_cookie_to_redis
+        response = merge_cart_cookie_to_redis(request, user, response)
         return response
 
 

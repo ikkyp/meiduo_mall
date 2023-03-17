@@ -152,14 +152,14 @@ class CartsView(View):
             return JsonResponse({'code': 0, 'errmsg': 'ok'})
         # 用户未登录状态
         else:
-            data = request.COOKIE.get('carts')
+            data = request.COOKIES.get('carts')
             if data:
                 carts = pickle.loads(base64.b64decode(data))
             else:
                 carts = {}
 
             del carts[sku_id]
-            new_carts = pickle.dumps(base64.b64encode(carts))
+            new_carts = base64.b64encode(pickle.dumps(carts))
             response = JsonResponse({'code': 0, 'errmsg': 'ok'})
             response.set_cookie('carts', new_carts.decode(), max_age=14 * 24 * 3600)
             #     5.5 返回响应
