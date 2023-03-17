@@ -1,8 +1,10 @@
 import json
-from django.utils import timezone
+import logging
 from decimal import Decimal
 
+from django.db import transaction
 from django.http import JsonResponse, HttpResponseBadRequest
+from django.utils import timezone
 from django.views import View
 from django_redis import get_redis_connection
 
@@ -10,6 +12,8 @@ from apps.goods.models import SKU
 from apps.orders.models import OrderInfo, OrderGoods
 from apps.users.models import Address
 from utils.views import LoginRequiredJSONMixin
+
+logger = logging.getLogger('django')
 
 
 class OrderSettlementView(LoginRequiredJSONMixin, View):
@@ -87,47 +91,58 @@ class OrderCommitView(LoginRequiredJSONMixin, View):
         # 订单号
         order_id = timezone.localtime().strftime('%Y%m%d%H%M%S') + ('%09d' % user.id)
         # 保存订单信息
-        order = OrderInfo.objects.create(
-            order_id=order_id,
-            user=user,
-            address=address,
-            total_count=0,
-            total_amount=Decimal('0'),
-            freight=Decimal('10.00'),
-            pay_method=pay_method,
-            status=OrderInfo.ORDER_STATUS_ENUM['UNPAID'] if pay_method == OrderInfo.PAY_METHODS_ENUM['ALIPAY'] else
-            OrderInfo.ORDER_STATUS_ENUM['UNSEND']
-        )
-        # 获取商品信息和选中状态
-        redis_conn = get_redis_connection('carts')
-        carts = redis_conn.hgetall('carts_%s' % user.id)
-        selected = redis_conn.smembers('selected_%s' % user.id)
-        cart_list = {}
-        for sku_id in selected:
-            cart_list[int(sku_id)] = int(carts[sku_id])
-        cart_keys = cart_list.keys()
-        skus = SKU.objects.filter(id__in=cart_keys)
-        for sku in skus:
-            # 该商品数量
-            sku_count = cart_list[sku.id]
-            if sku_count > sku.stock:
-                return JsonResponse({'code': 400, 'errmsg': '库存不足'})
-            sku.stock -= 1
-            sku.sales += 1
-            sku.save()
-            # 保存订单商品信息 OrderGoods（多）
-            OrderGoods.objects.create(
-                order=order,
-                sku=sku,
-                count=sku_count,
-                price=sku.price,
-            )
+        # 设置事务
+        with transaction.atomic():
+            save_id = transaction.savepoint()
+            try:
+                order = OrderInfo.objects.create(
+                    order_id=order_id,
+                    user=user,
+                    address=address,
+                    total_count=0,
+                    total_amount=Decimal('0'),
+                    freight=Decimal('10.00'),
+                    pay_method=pay_method,
+                    status=OrderInfo.ORDER_STATUS_ENUM['UNPAID'] if pay_method == OrderInfo.PAY_METHODS_ENUM[
+                        'ALIPAY'] else
+                    OrderInfo.ORDER_STATUS_ENUM['UNSEND']
+                )
+                # 获取商品信息和选中状态
+                redis_conn = get_redis_connection('carts')
+                carts = redis_conn.hgetall('carts_%s' % user.id)
+                selected = redis_conn.smembers('selected_%s' % user.id)
+                cart_list = {}
+                for sku_id in selected:
+                    cart_list[int(sku_id)] = int(carts[sku_id])
+                cart_keys = cart_list.keys()
+                skus = SKU.objects.filter(id__in=cart_keys)
+                for sku in skus:
+                    # 该商品数量
+                    sku_count = cart_list[sku.id]
+                    if sku_count > sku.stock:
+                        return JsonResponse({'code': 400, 'errmsg': '库存不足'})
+                    sku.stock -= 1
+                    sku.sales += 1
+                    sku.save()
+                    # 保存订单商品信息 OrderGoods（多）
+                    OrderGoods.objects.create(
+                        order=order,
+                        sku=sku,
+                        count=sku_count,
+                        price=sku.price,
+                    )
 
-            # 保存商品订单中总价和总数量
-            order.total_count += sku_count
-            order.total_amount += (sku_count * sku.price)
-        order.total_amount += order.freight
-        order.save()
+                    # 保存商品订单中总价和总数量
+                    order.total_count += sku_count
+                    order.total_amount += (sku_count * sku.price)
+                order.total_amount += order.freight
+                order.save()
+            except Exception as e:
+                logger.error(e)
+                transaction.savepoint_rollback(save_id)
+                return JsonResponse({'code': 400, 'errmsg': '下单失败'})
+        # 提交事务
+        transaction.savepoint_commit(save_id)
         # 清除购物车中已结算的商品
         pl = redis_conn.pipeline()
         pl.hdel('carts_%s' % user.id, *selected)
