@@ -67,7 +67,6 @@ class CartsView(View):
                     'count': count,
                     'selected': sku_id in selected,
                 }
-                # print(sku_id)
         else:
             cart_str = request.COOKIES.get('carts')
             if cart_str:
@@ -192,3 +191,38 @@ class CartsSelectAllView(View):
                 cookie_cart = base64.b64encode(pickle.dumps(cart))
                 response.set_cookie('carts', cookie_cart.decode(), max_age=7 * 24 * 3600)
             return response
+
+
+class CartsSimpleView(View):
+    """商品页面右上角购物车"""
+    # !!!!!!!!!!!!!!!! 修改了前端页面购物车的跳转 !!!!!!!!!!!!!!!!
+    def get(self, request):
+        user = request.user
+        if user.is_authenticated:
+            redis_conn = get_redis_connection('carts')
+            # 获取购买的商品数量以及是否选中的状态
+            carts = redis_conn.hgetall('carts_%s' % user.id)
+            carts_selected = redis_conn.smembers('selected_%s' % user.id)
+            carts_dict = {}
+            for sku_id, count in carts.items():
+                carts_dict[int(sku_id)] = {
+                    'count': count,
+                    'selected': sku_id in carts_selected
+                }
+        else:
+            cookie_cart_str = request.COOKIES.get('carts')
+            if cookie_cart_str:
+                carts_dict = pickle.loads(base64.b64decode(cookie_cart_str))
+            else:
+                carts_dict = {}
+        cart_skus = []
+        sku_ids = carts_dict.keys()
+        skus = SKU.objects.filter(id__in=sku_ids)
+        for sku in skus:
+            cart_skus.append({
+                'id': sku.id,
+                'name': sku.name,
+                'count': int(carts_dict[sku.id]['selected']),
+                'default_image_url': sku.default_image.url
+            })
+        return JsonResponse({'code': 0, 'errmsg': 'OK', 'cart_skus': cart_skus})
