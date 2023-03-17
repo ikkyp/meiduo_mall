@@ -1,11 +1,15 @@
+import json
+from django.utils import timezone
 from decimal import Decimal
 
-from django.http import JsonResponse
+from django.http import JsonResponse, HttpResponseBadRequest
 from django.views import View
 from django_redis import get_redis_connection
-from utils.views import LoginRequiredJSONMixin
+
 from apps.goods.models import SKU
+from apps.orders.models import OrderInfo, OrderGoods
 from apps.users.models import Address
+from utils.views import LoginRequiredJSONMixin
 
 
 class OrderSettlementView(LoginRequiredJSONMixin, View):
@@ -66,3 +70,69 @@ class OrderSettlementView(LoginRequiredJSONMixin, View):
         return JsonResponse({'code': 0,
                              'errmsg': 'ok',
                              'context': context})
+
+
+class OrderCommitView(LoginRequiredJSONMixin, View):
+    """订单提交"""
+
+    def post(self, request):
+        """保存订单信息和订单商品信息"""
+        json_dict = json.loads(request.body.decode())
+        address_id = json_dict.get('address_id')
+        pay_method = json_dict.get('pay_method')
+        address = Address.objects.get(id=address_id)
+        if pay_method not in (OrderInfo.PAY_METHODS_ENUM['CASH'], OrderInfo.PAY_METHODS_ENUM['ALIPAY']):
+            return HttpResponseBadRequest('参数pay_method错误')
+        user = request.user
+        # 订单号
+        order_id = timezone.localtime().strftime('%Y%m%d%H%M%S') + ('%09d' % user.id)
+        # 保存订单信息
+        order = OrderInfo.objects.create(
+            order_id=order_id,
+            user=user,
+            address=address,
+            total_count=0,
+            total_amount=Decimal('0'),
+            freight=Decimal('10.00'),
+            pay_method=pay_method,
+            status=OrderInfo.ORDER_STATUS_ENUM['UNPAID'] if pay_method == OrderInfo.PAY_METHODS_ENUM['ALIPAY'] else
+            OrderInfo.ORDER_STATUS_ENUM['UNSEND']
+        )
+        # 获取商品信息和选中状态
+        redis_conn = get_redis_connection('carts')
+        carts = redis_conn.hgetall('carts_%s' % user.id)
+        selected = redis_conn.smembers('selected_%s' % user.id)
+        cart_list = {}
+        for sku_id in selected:
+            cart_list[int(sku_id)] = int(carts[sku_id])
+        cart_keys = cart_list.keys()
+        skus = SKU.objects.filter(id__in=cart_keys)
+        for sku in skus:
+            # 该商品数量
+            sku_count = cart_list[sku.id]
+            if sku_count > sku.stock:
+                return JsonResponse({'code': 400, 'errmsg': '库存不足'})
+            sku.stock -= 1
+            sku.sales += 1
+            sku.save()
+            # 保存订单商品信息 OrderGoods（多）
+            OrderGoods.objects.create(
+                order=order,
+                sku=sku,
+                count=sku_count,
+                price=sku.price,
+            )
+
+            # 保存商品订单中总价和总数量
+            order.total_count += sku_count
+            order.total_amount += (sku_count * sku.price)
+        order.total_amount += order.freight
+        order.save()
+        # 清除购物车中已结算的商品
+        pl = redis_conn.pipeline()
+        pl.hdel('carts_%s' % user.id, *selected)
+        pl.srem('selected_%s' % user.id, *selected)
+        pl.execute()
+
+        # 响应提交订单结果
+        return JsonResponse({'code': 0, 'errmsg': '下单成功', 'order_id': order.order_id})
