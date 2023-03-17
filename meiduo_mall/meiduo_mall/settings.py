@@ -33,7 +33,8 @@ INSTALLED_APPS = [
     'corsheaders',  # CORS
     'haystack',  # 全文检索
     'django_crontab',  # 定时任务
-    'apps.carts'
+    'apps.carts',
+    'apps.orders',
 ]
 
 MIDDLEWARE = [
