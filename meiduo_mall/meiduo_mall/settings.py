@@ -35,6 +35,7 @@ INSTALLED_APPS = [
     'django_crontab',  # 定时任务
     'apps.carts',
     'apps.orders',
+    'apps.pay',
 ]
 
 MIDDLEWARE = [
@@ -257,7 +258,7 @@ FDFS_BASE_URL = 'http://image.meiduo.site:8888/'
 HAYSTACK_CONNECTIONS = {
     'default': {
         'ENGINE': 'haystack.backends.elasticsearch_backend.ElasticsearchSearchEngine',
-        'URL': 'http://192.168.233.129:9200/',  # Elasticsearch服务器ip地址，端口号固定为9200
+        'URL': 'http://192.168.126.48:9200/',  # Elasticsearch服务器ip地址，端口号固定为9200
         'INDEX_NAME': 'meiduo_mall',  # Elasticsearch建立的索引库的名称
     },
 }

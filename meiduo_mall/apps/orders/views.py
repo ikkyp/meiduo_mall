@@ -1,6 +1,7 @@
 import json
 import logging
 from decimal import Decimal
+from time import sleep
 
 from django.db import transaction
 from django.http import JsonResponse, HttpResponseBadRequest
@@ -117,24 +118,34 @@ class OrderCommitView(LoginRequiredJSONMixin, View):
                 cart_keys = cart_list.keys()
                 skus = SKU.objects.filter(id__in=cart_keys)
                 for sku in skus:
-                    # 该商品数量
-                    sku_count = cart_list[sku.id]
-                    if sku_count > sku.stock:
-                        return JsonResponse({'code': 400, 'errmsg': '库存不足'})
-                    sku.stock -= 1
-                    sku.sales += 1
-                    sku.save()
-                    # 保存订单商品信息 OrderGoods（多）
-                    OrderGoods.objects.create(
-                        order=order,
-                        sku=sku,
-                        count=sku_count,
-                        price=sku.price,
-                    )
-
-                    # 保存商品订单中总价和总数量
-                    order.total_count += sku_count
-                    order.total_amount += (sku_count * sku.price)
+                    while True:
+                        # 该商品数量
+                        old_stock = sku.stock
+                        old_sales = sku.sales
+                        sku_count = cart_list[sku.id]
+                        if sku_count > old_stock:
+                            transaction.savepoint_rollback(save_id)
+                            return JsonResponse({'code': 400, 'errmsg': '库存不足'})
+                        # 新的库存及销量
+                        new_stock = old_stock - sku_count
+                        new_sales = old_sales + sku_count
+                        # 构建乐观锁
+                        result = SKU.objects.filter(id=sku.id, stock=old_stock).update(stock=new_stock, sales=new_sales)
+                        # 代表更新失败，进行写一次循环
+                        if result == 0:
+                            sleep(0.05)  # 进行睡眠，减轻数据库负担
+                            continue
+                        # 保存订单商品信息 OrderGoods（多）
+                        OrderGoods.objects.create(
+                            order=order,
+                            sku=sku,
+                            count=sku_count,
+                            price=sku.price,
+                        )
+                        # 保存商品订单中总价和总数量
+                        order.total_count += sku_count
+                        order.total_amount += (sku_count * sku.price)
+                        break
                 order.total_amount += order.freight
                 order.save()
             except Exception as e:
