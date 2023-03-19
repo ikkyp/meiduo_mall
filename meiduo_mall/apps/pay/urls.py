@@ -1,7 +1,8 @@
 from django.urls import path
 
-from apps.orders.views import OrderSettlementView
+from apps.pay.views import PayUrlView, PaymentStatusView
 
 urlpatterns = [
-    path('orders/settlement/', OrderSettlementView.as_view()),
+    path('payment/<order_id>/', PayUrlView.as_view()),
+    path('payment/status/', PaymentStatusView.as_view()),
 ]
