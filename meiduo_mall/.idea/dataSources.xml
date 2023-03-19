@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="DataSourceManagerImpl" format="xml" multifile-model="true">
-    <data-source source="LOCAL" name="meiduo_test@localhost" uuid="f4098921-7b7f-4862-89bc-f3dc85b64c15">
+    <data-source source="LOCAL" name="meiduo_test@192.168.126.48" uuid="0aa98ade-02d7-4d90-8936-aacbf8af1f1d">
       <driver-ref>mysql.8</driver-ref>
       <synchronize>true</synchronize>
       <jdbc-driver>com.mysql.cj.jdbc.Driver</jdbc-driver>
-      <jdbc-url>jdbc:mysql://localhost:3306/meiduo_test</jdbc-url>
+      <jdbc-url>jdbc:mysql://192.168.126.48:3306/meiduo_test</jdbc-url>
       <working-dir>$ProjectFileDir$</working-dir>
     </data-source>
   </component>

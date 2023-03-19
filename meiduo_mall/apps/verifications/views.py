@@ -58,5 +58,5 @@ class SmsCodeView(View):
         # 执行管道内的指令，减少redis数据库的访问次数
         pipeline.execute()
         # 执行celery中的短信发送模块(测试阶段，不发送信息)
-        # celery_send_sms_code.delay(mobile, sms_code)
+        celery_send_sms_code.delay(mobile, sms_code)
         return JsonResponse({'code': 0, 'errmsg': 'ok'})

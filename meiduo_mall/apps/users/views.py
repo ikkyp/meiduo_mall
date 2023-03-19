@@ -150,7 +150,6 @@ class EmailView(LoginRequiredJSONMixin, View):
         from celery_tasks.email.tasks import send_verify_email
         user = request.user
         verify_url = settings.EMAIL_VERIFY_URL + '?user_id=%s&&email=%s' % (user.id, user.email)
-        print(verify_url)
         send_verify_email(email, verify_url)
         return JsonResponse({'code': 200, 'errmsg': '添加邮箱成功'})
 
